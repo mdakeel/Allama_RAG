@@ -1,5 +1,5 @@
 from langdetect import detect
-from core.logging import logger
+from src.core.logging import logger
 
 def detect_language(text: str) -> str:
     try:

@@ -1,6 +1,6 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-from core.config import SETTINGS
-from core.logging import logger
+from src.core.config import SETTINGS
+from src.core.logging import logger
 
 class ChatModel:
     def __init__(self):

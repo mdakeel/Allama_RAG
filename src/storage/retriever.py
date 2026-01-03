@@ -1,5 +1,5 @@
-from storage.vector_store import VectorStore
-from core.logging import logger
+from src.storage.vector_store import VectorStore
+from src.core.logging import logger
 
 class Retriever:
     def __init__(self):
