@@ -1,22 +1,32 @@
-from chat.model_loader import ChatModel
-from chat.language_detect import detect_language
-from storage.retriever import Retriever
+import logging
+import sys
+from fastapi import FastAPI
+from pydantic import BaseModel
+from src.chat.model_loader import ModelLoader
+from src.chat.chat_model import ChatModel
 
-def main():
-    model = ChatModel()
-    retriever = Retriever()
+sys.stdout.reconfigure(encoding="utf-8")
+logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
 
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() in ["exit", "quit"]:
-            break
+app = FastAPI(
+    title="Islamic RAG API",
+    description="Ask questions based on YouTube video transcripts",
+    version="1.0.0"
+)
 
-        lang = detect_language(user_input)
-        context = retriever.get_context(user_input)
+model_loader = ModelLoader()
+chat = ChatModel(model_loader)
 
-        prompt = f"User asked in {lang}: {user_input}\n\nRelevant context:\n{context}\n\nAnswer in the same language."
-        response = model.generate(prompt)
-        print(f"Model: {response}")
+class QuestionRequest(BaseModel):
+    question: str
 
-if __name__ == "__main__":
-    main()
+class AnswerResponse(BaseModel):
+    answer: str
+    sources: list[str] | None = []
+
+@app.post("/ask", response_model=AnswerResponse)
+def ask_question(req: QuestionRequest):
+    result = chat.answer(req.question)
+    if isinstance(result, dict):
+        return result
+    return {"answer": str(result), "sources": []}
