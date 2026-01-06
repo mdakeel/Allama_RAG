@@ -1,99 +1,52 @@
-import os
-import logging
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List, Dict
-from src.chat.model_loader import load_model
 from src.retrieval.search import VectorSearcher
-from src.reasoning.evidence_builder import build_evidence_text
-from langdetect import detect
+from src.reasoning.flant5_reasoner import FlanT5Reasoner
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# FastAPI app
-app = FastAPI(title="Islamic Transcript QA API")
+def answer_question(question: str) -> str:
+    searcher = VectorSearcher()
+    reasoner = FlanT5Reasoner()
 
-# Load LLM model once
-MODEL_NAME = os.getenv("HF_MODEL", "google/flan-t5-small")
-logger.info(f"Loading model {MODEL_NAME}...")
-llm = load_model(MODEL_NAME)
+    results = searcher.search(question, top_k=25)
 
-# Load VectorSearcher
-logger.info("Loading VectorSearcher...")
-searcher = VectorSearcher()
+    if not results:
+        return "No relevant lecture evidence was found."
 
-# Request/response models
-class QARequest(BaseModel):
-    question: str
-    top_k: int = 5
+    # 🔹 Merge ALL relevant text (trim safely)
+    evidence_blocks = []
+    for r in results:
+        txt = r["text"].strip()
+        if len(txt) > 400:
+            txt = txt[:400]
+        evidence_blocks.append(txt)
 
-class QAResponse(BaseModel):
-    answer: str
-    sources: List[Dict]
+    merged_evidence = "\n".join(evidence_blocks)
 
-# Helper to detect language
-def detect_language(text: str) -> str:
-    try:
-        lang = detect(text)
-        if lang not in ["en", "hi", "ur"]:
-            # Arabic/Urdu script → ur
-            if any("\u0600" <= ch <= "\u06FF" for ch in text):
-                lang = "ur"
-            # Devanagari → hi
-            elif any("\u0900" <= ch <= "\u097F" for ch in text):
-                lang = "hi"
-            else:
-                lang = "en"
-        return lang
-    except Exception as e:
-        logger.warning(f"Language detection failed: {e}")
-        return "en"
+    final_prompt = f"""
+You are a knowledgeable Islamic teacher.
 
-# Build prompt for LLM
-def build_prompt(question: str, evidence_text: str, lang: str) -> str:
-    # The prompt adapts answer language automatically
-    prompt = f"""
-You are a knowledgeable Islamic AI assistant.
+Below is lecture content extracted from multiple Quran lessons.
+Understand it carefully and answer the question.
 
-RULES:
-- Answer ONLY in {lang}
-- Use ONLY the reference content below
-- Add light explanation for clarity
-- Do NOT hallucinate
-- Write clear, structured text
-- Use headings, **bold**, and emojis
+Lecture Content:
+{merged_evidence}
 
-REFERENCE CONTENT:
-{evidence_text}
+Rules:
+- Answer ONLY in English
+- Explain clearly and calmly
+- Do NOT mention videos or speakers
+- Do NOT quote long text
+- Write at least 8–10 sentences
 
-QUESTION:
+Question:
 {question}
 
-FINAL ANSWER:
+Answer:
 """
-    return prompt
 
-@app.post("/ask", response_model=QAResponse)
-def ask_question(req: QARequest):
-    lang = detect_language(req.question)
-    
-    # Retrieve top_k chunks
-    results = searcher.search(req.question, top_k=req.top_k)
-    
-    if not results:
-        return QAResponse(
-            answer="⚠️ This question is not directly covered in the available video segments.",
-            sources=[]
-        )
-    
-    # Build evidence-only text
-    evidence = build_evidence_text(results)
-    
-    # Build prompt for LLM
-    prompt = build_prompt(req.question, evidence["evidence_text"], lang)
-    
-    # Generate answer
-    answer = llm.generate(prompt, max_length=512)
-    
-    return QAResponse(answer=answer, sources=evidence["references"])
+    return reasoner.generate(final_prompt, max_new_tokens=300).strip()
+
+
+if __name__ == "__main__":
+    q = "Huruf-e-Muqattaat kya hain? Unka maqsad kya bataya gaya hai?"
+    print("\nFINAL ANSWER:\n")
+    print(answer_question(q))
