@@ -6,15 +6,13 @@ import sys
 import streamlit as st
 import os
 
-# Import model code lazily and handle import errors so Streamlit UI doesn't crash
+# Import evidence builder directly
 try:
-    from src.chat.chat_model import ChatModel
-    from src.chat.model_loader import load_model
+    from src.reasoning.evidence_builder import build_evidence_answer
     from src.core.logging import logger
     _MODEL_IMPORT_ERROR = None
 except Exception as _e:
-    ChatModel = None
-    load_model = None
+    build_evidence_answer = None
     logger = None
     _MODEL_IMPORT_ERROR = str(_e)
 
@@ -44,25 +42,17 @@ st.markdown("""
 
 # Initialize session state
 if 'chat_model' not in st.session_state:
-    # If model code failed to import (e.g. Keras/transformers dependency issue),
-    # avoid raising on import and show helpful message in UI instead.
+    # If model code failed to import, show helpful message
     if _MODEL_IMPORT_ERROR:
         st.session_state.ready = False
         st.session_state.error = (
-            "Model import failed: " + _MODEL_IMPORT_ERROR + ".\n"
-            "If you see a Keras 3 compatibility error, run: `pip install tf-keras` "
-            "or install compatible transformer/sentence-transformers versions."
+            "Import failed: " + _MODEL_IMPORT_ERROR
         )
-        st.session_state.chat_model = None
+        st.session_state.builder = None
     else:
-        with st.spinner("⏳ Model load ho raha hai..."):
-            try:
-                llm = load_model()
-                st.session_state.chat_model = ChatModel(llm=llm)
-                st.session_state.ready = True
-            except Exception as e:
-                st.session_state.ready = False
-                st.session_state.error = str(e)
+        st.session_state.ready = True
+        st.session_state.builder = build_evidence_answer
+        st.session_state.error = None
 
 # Header
 st.title("🎓 Allama RAG System")
@@ -135,34 +125,22 @@ if st.button("🔍 Jawab Lao", use_container_width=True, type="primary"):
     else:
         with st.spinner("🤖 Soch raha hoon..."):
             try:
-                result = st.session_state.chat_model.answer(question)
-                answer = result.get("answer", "")
-                sources = result.get("sources", [])
+                # Use evidence builder directly (already imported at top)
+                answer, references = st.session_state.builder(question)
                 
                 st.markdown("---")
                 st.markdown("### 📖 Jawab")
                 st.markdown(answer)
                 
-                if sources:
+                if references:
                     st.markdown("---")
-                    st.markdown("### 📺 Video Links (Timestamps ke Sath)")
-                    for i, src in enumerate(sources, 1):
-                        # Extract timestamp from URL for display
-                        timestamp = ""
-                        if "&t=" in src:
-                            t_val = src.split("&t=")[-1].replace("s", "")
-                            try:
-                                secs = int(t_val)
-                                mins = secs // 60
-                                secs = secs % 60
-                                timestamp = f" ({mins}:{secs:02d})"
-                            except:
-                                pass
-                        
+                    st.markdown("### 📺 Video Links (Exact Timestamps)")
+                    for i, src in enumerate(references, 1):
                         st.markdown(f"""
                         <div class="source-box">
-                        <strong>Video {i}{timestamp}</strong><br>
-                        <a href="{src}" target="_blank">🎬 Click karo video dekhnay ke liye →</a>
+                        <strong>Video {i}: {src.get('title', 'N/A')}</strong><br>
+                        <em>Time: {src.get('time', 'N/A')}</em><br>
+                        <a href="{src.get('url', '#')}" target="_blank">🎬 Video dekho →</a>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -172,22 +150,13 @@ if st.button("🔍 Jawab Lao", use_container_width=True, type="primary"):
                 st.markdown("---")
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Videos Found", len(sources))
+                    st.metric("📺 Videos Found", len(references))
                 with col2:
-                    st.metric("Answer Chars", f"{len(answer)}")
+                    st.metric("📝 Answer Length", f"{len(answer)} chars")
                 with col3:
-                    st.metric("Query Chars", f"{len(question)}")
+                    st.metric("❓ Question Length", f"{len(question)} chars")
                     
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
-                if logger:
-                    logger.error(f"Chat error: {e}", exc_info=True)
-
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #888; font-size: 12px;">
-    <p>Made with ❤️ | Allama RAG System v1.0 | 2026</p>
-    <p>📧 For issues, visit: <a href="#">GitHub Repository</a></p>
-</div>
-""", unsafe_allow_html=True)
+                import traceback
+                st.error(traceback.format_exc())

@@ -1,16 +1,10 @@
-import os
-import yaml
-import logging.config
+# src/core/logging.py
+import logging
+import sys
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-CONFIG_DIR = os.path.join(BASE_DIR, "config")
-
-def setup_logging():
-    logging_path = os.path.join(CONFIG_DIR, "logging.yaml")
-    with open(logging_path, "r") as f:
-        config = yaml.safe_load(f)
-    logging.config.dictConfig(config)
-
-# Initialize once
-setup_logging()
-logger = logging.getLogger("chat-model")
+logger = logging.getLogger("allama")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
