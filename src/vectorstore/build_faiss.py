@@ -16,7 +16,7 @@ with open(CHUNKS_PATH, "rb") as f:
 print(f"Total chunks loaded: {len(chunks)}")
 
 # load embedding model (CPU friendly)
-model = SentenceTransformer("intfloat/multilingual-e5-base")
+model = SentenceTransformer("intfloat/multilingual-e5-large")
 
 embeddings = []
 
