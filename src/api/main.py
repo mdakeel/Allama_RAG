@@ -1,52 +1,41 @@
-from src.retrieval.search import VectorSearcher
-from src.reasoning.flant5_reasoner import FlanT5Reasoner
 
+# src/api/main.py
+from src.retrieval.search import FaissSearcher
+from src.reasoning.gpt2_reasoner import GPT2Reasoner
 
-def answer_question(question: str) -> str:
-    searcher = VectorSearcher()
-    reasoner = FlanT5Reasoner()
+def answer_question(question: str, top_k: int = 10):
+    # 🔹 Initialize reasoner (model load होगा flant5_reasoner.py में)
+    llm = GPT2Reasoner()
 
-    results = searcher.search(question, top_k=25)
+    # 🔹 Retrieve context
+    searcher = FaissSearcher()
+    results = searcher.search(question, top_k=top_k)
 
-    if not results:
-        return "No relevant lecture evidence was found."
+    if not results: context = "No lecture excerpts available." 
+    else: context = "\n".join( r.get("text") or r.get("text_roman") or "" for r in results if (r.get("text") or r.get("text_roman") or "").strip() )
+    # 🔹 Build prompt
+    prompt = f"""
+Question: {question}
 
-    # 🔹 Merge ALL relevant text (trim safely)
-    evidence_blocks = []
-    for r in results:
-        txt = r["text"].strip()
-        if len(txt) > 400:
-            txt = txt[:400]
-        evidence_blocks.append(txt)
+Context:
+{context}
 
-    merged_evidence = "\n".join(evidence_blocks)
+Task:
+Answer the question based on the above context.
+Answer concisely in English in 3–4 sentences.
+Avoid vague language.
+Explain clearly in English in 3–4 sentences.
+Do NOT refer to videos or speakers.
+Do Not repeart text from the context.
+If context is empty or irrelevant, politely say: "No relevant lecture content was found."
 
-    final_prompt = f"""
-You are a knowledgeable Islamic teacher.
-
-Below is lecture content extracted from multiple Quran lessons.
-Understand it carefully and answer the question.
-
-Lecture Content:
-{merged_evidence}
-
-Rules:
-- Answer ONLY in English
-- Explain clearly and calmly
-- Do NOT mention videos or speakers
-- Do NOT quote long text
-- Write at least 8–10 sentences
-
-Question:
-{question}
-
-Answer:
+Answer: 
 """
 
-    return reasoner.generate(final_prompt, max_new_tokens=300).strip()
 
+    return llm.generate(prompt, max_new_tokens=220)
 
 if __name__ == "__main__":
-    q = "Huruf-e-Muqattaat kya hain? Unka maqsad kya bataya gaya hai?"
+    q = input("Enter your question: ")
     print("\nFINAL ANSWER:\n")
     print(answer_question(q))

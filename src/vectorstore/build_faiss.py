@@ -16,12 +16,12 @@ with open(CHUNKS_PATH, "rb") as f:
 print(f"Total chunks loaded: {len(chunks)}")
 
 # load embedding model (CPU friendly)
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+model = SentenceTransformer("intfloat/multilingual-e5-base")
 
 embeddings = []
 
-for chunk in tqdm(chunks, desc="Embedding chunks"):
-    text = chunk["text_roman"]
+for chunk in tqdm(chunks):
+    text = "passage: " + chunk["text_roman"]
     vec = model.encode(text, normalize_embeddings=True)
     embeddings.append(vec)
 
