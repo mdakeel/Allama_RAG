@@ -15,7 +15,8 @@ class FlanT5Reasoner:
 
         self.model = AutoModelForSeq2SeqLM.from_pretrained(
             "google/flan-t5-large",
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+            dtype=torch.float16 if self.device == "cuda" else torch.float32
+
         ).to(self.device)
 
         self.model.eval()
@@ -52,10 +53,10 @@ class FlanT5Reasoner:
             output = self.model.generate(
                 **inputs, 
                 max_new_tokens=self.max_new_tokens, 
-                min_length=120, # 🔥 ensures multi-sentence 
+                min_length=120, #  ensures multi-sentence 
                 num_beams=4, # beam search for quality 
-                repetition_penalty=2.0, # 🔥 strong penalty against repeats 
-                no_repeat_ngram_size=3, # 🔥 prevents phrase repetition 
+                repetition_penalty=2.0, #  strong penalty against repeats 
+                no_repeat_ngram_size=3, #  prevents phrase repetition 
                 early_stopping=True
             )
 
@@ -63,3 +64,6 @@ class FlanT5Reasoner:
             output[0],
             skip_special_tokens=True
         ).strip()
+
+
+
